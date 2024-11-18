@@ -1,0 +1,1 @@
+C:\Users\ivan.gonzalo\Documents\VSCode_Workspace\PickAndGo\pickandgo.client\obj\Debug\pickandgo.client.esproj.CoreCompileInputs.cache
