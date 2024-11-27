@@ -7,6 +7,8 @@ namespace PickAndGo.Server.Models
         public required string Email { get; set; }
         public required string Phone { get; set; }
         public required string Password { get; set; }
-        public required string Role { get; set; }
+
+        // El rol será asignado en el backend según el tipo de usuario (Empleado o Cliente)
+        public string? Role { get; set; } // Sin valor predeterminado
     }
 }

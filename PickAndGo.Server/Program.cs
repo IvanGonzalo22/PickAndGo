@@ -58,6 +58,9 @@ builder.Services.AddSwaggerGen(options =>
 // Registrar el servicio de usuarios
 builder.Services.AddScoped<IUserService, UserService>();
 
+// builder.Services.AddScoped<IEmployeeInvitationService, EmployeeInvitationService>();
+
+
 var app = builder.Build();
 
 // Configuración del pipeline de solicitudes

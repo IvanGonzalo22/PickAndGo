@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "bGcDVwkK1uGBBJBPGrUnrBCG72A5ATM4D/7SVVFq69w=",
+  "Hash": "wKqLaQccKBndXFAcERTr07geH5rRZplHlbRgWoq2fd0=",
   "Source": "PickAndGo.Server",
   "BasePath": "_content/PickAndGo.Server",
   "Mode": "Default",
@@ -19,5 +19,6 @@
     }
   ],
   "DiscoveryPatterns": [],
-  "Assets": []
+  "Assets": [],
+  "Endpoints": []
 }

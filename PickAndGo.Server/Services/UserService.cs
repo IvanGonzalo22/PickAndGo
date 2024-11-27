@@ -5,6 +5,7 @@ using System.Text;
 using PickAndGo.Server.Data;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.Identity.Client;
 
 namespace PickAndGo.Server.Services
 {
@@ -19,118 +20,117 @@ namespace PickAndGo.Server.Services
             _configuration = configuration;
         }
 
-        public async Task<(bool IsSuccess, string ErrorMessage)> RegisterAsync(UserDto userDto)
+        public async Task<(bool IsSuccess, string ErrorMessage)> RegisterAsync(UserDto userDto, string role = "Customer")
         {
-            var existingUser = await _context.Customers
+            // Asignar el rol proporcionado, por defecto "Customer"
+            userDto.Role = role;
+
+            // Verificar si el correo electrónico ya está registrado
+            var existingUser = await _context.Users
                 .FirstOrDefaultAsync(u => u.Email == userDto.Email);
+
             if (existingUser != null)
                 return (false, "Email is already taken.");
 
-            var existingEmployee = await _context.Employees
-                .FirstOrDefaultAsync(u => u.Email == userDto.Email);
-            if (existingEmployee != null)
-                return (false, "Email is already taken.");
+            // Generar el hash y el salt de la contraseña
+            var (passwordHash, salt) = HashPassword(userDto.Password);
 
-            var passwordHash = HashPassword(userDto.Password);
-
-            if (userDto.Role.ToLower() == "customer")
+            // Crear un nuevo usuario
+            var user = new User
             {
-                var customer = new Customer
-                {
-                    FirstName = userDto.FirstName,
-                    LastName = userDto.LastName,
-                    Email = userDto.Email,
-                    Phone = userDto.Phone,
-                    PasswordHash = passwordHash
-                };
+                FirstName = userDto.FirstName,
+                LastName = userDto.LastName,
+                Email = userDto.Email,
+                Phone = userDto.Phone,
+                PasswordHash = passwordHash,
+                PasswordSalt = salt, // Almacenar el salt junto al hash
+                Role = userDto.Role
+            };
 
-                _context.Customers.Add(customer);
-                await _context.SaveChangesAsync();
-            }
-            else if (userDto.Role.ToLower() == "employee")
-            {
-                var employee = new Employee
-                {
-                    FirstName = userDto.FirstName,
-                    LastName = userDto.LastName,
-                    Email = userDto.Email,
-                    Phone = userDto.Phone,
-                    PasswordHash = passwordHash
-                };
-
-                _context.Employees.Add(employee);
-                await _context.SaveChangesAsync();
-            }
-            else
-            {
-                return (false, "Invalid role.");
-            }
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
 
             return (true, string.Empty);
         }
 
-        public async Task<(bool IsSuccess, string Token, string ErrorMessage)> LoginAsync(UserDto userDto)
+        public async Task<(bool IsSuccess, string Token, string ErrorMessage)> LoginAsync(LoginDto loginDto)
         {
-            var customer = await _context.Customers
-                .FirstOrDefaultAsync(u => u.Email == userDto.Email);
-            if (customer != null && VerifyPassword(userDto.Password, customer.PasswordHash))
-            {
-                return (true, GenerateJwtToken(customer.Email), string.Empty);
-            }
+            // Search for the user by email in db and its contained in user value
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            var employee = await _context.Employees
-                .FirstOrDefaultAsync(u => u.Email == userDto.Email);
-            if (employee != null && VerifyPassword(userDto.Password, employee.PasswordHash))
+            // Check if the user exists and if the provided password matches the stored hash using VerifyPassword function
+            if (user != null && VerifyPassword(loginDto.Password, user.PasswordHash, user.PasswordSalt))
             {
-                return (true, GenerateJwtToken(employee.Email), string.Empty);
+                // If the credentials are valid, generate a JWT token for authentication using GenerateJwtToken function and return it
+                return (true, GenerateJwtToken(user), string.Empty);
             }
 
             return (false, string.Empty, "Invalid email or password.");
         }
 
-        private string GenerateJwtToken(string email)
+        private string GenerateJwtToken(User user)
         {
+            // claims (payload) is the variable which will contain the db specified user information to be handled in frontend
             var claims = new[]
             {
-                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, email)
+                // That specified user info is the email to welcome the user
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, user.Email),
+                // and the role to handle what is the content that each user must see depending on it
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, user.Role)
+                
+                // We could also add more db fields if it's required by frontend
             };
 
+            // JWT Token Signing Configuration (signature) to ensure the token won't be maliciosly altered after being signed
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:SecretKey"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+            // Token creation 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddHours(1),
+                expires: DateTime.Now.AddHours(1), // Token expiration time
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
-        
-        private string HashPassword(string password)
+
+        private (string Hash, string Salt) HashPassword(string password)
         {
-            var salt = new byte[16];
-            new Random().NextBytes(salt);
+            // Generate unique salt
+            var saltBytes = new byte[16];
+            new Random().NextBytes(saltBytes);
+            var salt = Convert.ToBase64String(saltBytes);
+
+            // Generate hash using salt
             var hash = Convert.ToBase64String(KeyDerivation.Pbkdf2(
                 password: password,
-                salt: salt,
+                salt: saltBytes,
                 prf: KeyDerivationPrf.HMACSHA256,
                 iterationCount: 10000,
                 numBytesRequested: 256 / 8));
 
-            return hash;
+            return (hash, salt);
         }
 
-        private bool VerifyPassword(string enteredPassword, string storedHash)
+        // Function that verifies if generated hash and stored hash are equal
+        private bool VerifyPassword(string enteredPassword, string storedHash, string storedSalt)
         {
-            return storedHash == HashPassword(enteredPassword);
-        }
+            // Convert stored salt to bytes
+            var saltBytes = Convert.FromBase64String(storedSalt);
 
-        Task IUserService.LoginAsync(LoginDto loginDto)
-        {
-            throw new NotImplementedException();
+            // Generate new hash with the same salt
+            var hash = Convert.ToBase64String(KeyDerivation.Pbkdf2(
+                password: enteredPassword,
+                salt: saltBytes,
+                prf: KeyDerivationPrf.HMACSHA256,
+                iterationCount: 10000,
+                numBytesRequested: 256 / 8));
+
+            // and return TRUE if generated hash and stored hash are equal
+            return hash == storedHash;
         }
     }
 }

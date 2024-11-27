@@ -1,0 +1,45 @@
+// using System;
+// using System.Net;
+// using System.Net.Mail;
+// using System.Threading.Tasks;
+
+// namespace PickAndGo.Server.Services
+// {
+//     public class EmailService : IEmailService
+//     {
+//         private readonly string _smtpHost = "smtp.example.com"; // Cambia esto por el servidor SMTP de tu elección
+//         private readonly int _smtpPort = 587; // Puerto SMTP
+//         private readonly string _smtpUsername = "your-email@example.com"; // Tu dirección de correo electrónico
+//         private readonly string _smtpPassword = "your-email-password"; // Tu contraseña de correo electrónico
+
+//         public async Task<bool> SendEmailAsync(string to, string subject, string body)
+//         {
+//             try
+//             {
+//                 var smtpClient = new SmtpClient(_smtpHost)
+//                 {
+//                     Port = _smtpPort,
+//                     Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+//                     EnableSsl = true,
+//                 };
+
+//                 var mailMessage = new MailMessage
+//                 {
+//                     From = new MailAddress(_smtpUsername),
+//                     Subject = subject,
+//                     Body = body,
+//                     IsBodyHtml = true,
+//                 };
+//                 mailMessage.To.Add(to);
+
+//                 await smtpClient.SendMailAsync(mailMessage);
+//                 return true;
+//             }
+//             catch (Exception ex)
+//             {
+//                 Console.WriteLine($"Error sending email: {ex.Message}");
+//                 return false;
+//             }
+//         }
+//     }
+// }
